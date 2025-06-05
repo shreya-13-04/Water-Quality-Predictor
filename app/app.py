@@ -1,17 +1,29 @@
+# ----------------------------------------
+# Imports
+# ----------------------------------------
 import streamlit as st
-from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
-import joblib
 import numpy as np
-import pydeck as pdk
-import json
+import shap
+import matplotlib.pyplot as plt
+import folium
+from folium.plugins import MarkerCluster
+from streamlit_folium import st_folium
+import joblib
+from sklearn.ensemble import RandomForestClassifier
+import seaborn as sns
+from streamlit_folium import folium_static
 
-# Streamlit Page Setup
-st.set_page_config(page_title="Water Quality Predictor", page_icon="💧", layout="centered")
 
-# Load model and scaler
+
+# ----------------------------------------
+# Page Configuration
+# ----------------------------------------
+st.set_page_config(page_title="Water Quality Predictor", page_icon="💧", layout="wide")
+
+# ----------------------------------------
+# Load Model and Scaler
+# ----------------------------------------
 @st.cache_resource
 def load_model():
     model = joblib.load("models/water_quality_model.pkl")
@@ -20,287 +32,276 @@ def load_model():
 
 model, scaler = load_model()
 
-# Load data
+# ----------------------------------------
+# Load Local Data (mocked for offline)
+# ----------------------------------------
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data/water_potability.csv")
-    np.random.seed(42)
-    df["latitude"] = np.random.uniform(8, 37, size=len(df))   # India's lat range
-    df["longitude"] = np.random.uniform(68, 97, size=len(df)) # India's lon range
+    df = pd.read_csv("data/country_potability_scores.csv")
+    if "latitude" not in df or "longitude" not in df:
+        np.random.seed(42)
+        df["latitude"] = np.random.uniform(8, 37, size=len(df))
+        df["longitude"] = np.random.uniform(68, 97, size=len(df))
     return df
 
 df = load_data()
 
+# ----------------------------------------
+# Sidebar Navigation
+# ----------------------------------------
+
 st.sidebar.markdown("<h2>EXPLORE</h2>", unsafe_allow_html=True)
 
-
-# Initialize session state for page
 if "page" not in st.session_state:
-    st.session_state.page = "🔮 Predict"  # default page
+    st.session_state.page = "🔮 Predict"
 
 st.markdown("""
 <style>
-/* Make radio buttons horizontal */
 div[role="radiogroup"] {
     display: flex;
-    gap: 20px;  /* space between options */
+    gap: 20px;
 }
-
 div[role="radiogroup"] > label {
     display: flex;
     align-items: center;
-    gap: 6px;  /* space between circle and text */
+    gap: 6px;
 }
 </style>
 """, unsafe_allow_html=True)
 
 page = st.sidebar.radio(
     "",
-    ("🔮 Predict", "📊 Visualize Data", "🗺️ Map", "🧩 Quizyy"),
-    index=["🔮 Predict", "📊 Visualize Data", "🗺️ Map", "🧩 Quizyy"].index(st.session_state.page),
+    ("🔮 Predict",  "📊 Dashboard", "🗺️ GeoMap", "🧪 What-if Analysis", "🧩 Quizyy"),
+    index=["🔮 Predict",  "📊 Dashboard", "🗺️ GeoMap", "🧪 What-if Analysis", "🧩 Quizyy"].index(st.session_state.page),
     key="page_selector"
 )
-
-# Update session state page
 st.session_state.page = page
 
-
-
-# --------------------------------------------
-# 🔮 Page 1: Water Quality Prediction
-# --------------------------------------------
+# ----------------------------------------
+# Page: Predict
+# ----------------------------------------
 if page == "🔮 Predict":
     st.title("💧 Water Quality Predictor")
     st.header("🔍 Check Your Water Quality")
 
-    # Input fields
-    def float_input(label):
-        value = st.text_input(label)
+    def float_input(label, help_text=""):
+        value = st.text_input(label, help=help_text)
         try:
             return float(value) if value else None
         except ValueError:
             st.warning(f"⚠️ Please enter a valid number for '{label}'")
             return None
 
-    ph = float_input("pH (scale 0-14)")
-    Hardness = float_input("Hardness (mg/L)")
-    Solids = float_input("Solids (mg/L)")
-    Chloramines = float_input("Chloramines (mg/L)")
-    Sulfate = float_input("Sulfate (mg/L)")
-    Conductivity = float_input("Conductivity (μS/cm)")
-    Organic_carbon = float_input("Organic Carbon (mg/L)")
-    Trihalomethanes = float_input("Trihalomethanes (μg/L)")
-    Turbidity = float_input("Turbidity (NTU)")
-    if st.button("🔮 Predict"):
-        features = np.array([[ph, Hardness, Solids, Chloramines, Sulfate,
-                              Conductivity, Organic_carbon, Trihalomethanes, Turbidity]])
-        features_scaled = scaler.transform(features)
-        prediction = model.predict(features_scaled)
-
-        if prediction[0] == 1:
-            result_text = "✅ The water is POTABLE (Safe to drink)."
-            st.success(result_text)
-        else:
-            result_text = "❌ The water is NOT POTABLE (Unsafe to drink)."
-            st.error(result_text)
-
-        report = f"""
-Water Quality Prediction Report
-
-Input Parameters:
------------------
-pH: {ph}
-Hardness: {Hardness}
-Solids: {Solids}
-Chloramines: {Chloramines}
-Sulfate: {Sulfate}
-Conductivity: {Conductivity}
-Organic Carbon: {Organic_carbon}
-Trihalomethanes: {Trihalomethanes}
-Turbidity: {Turbidity}
-
-Prediction Result:
-------------------
-{result_text}
-"""
-        st.download_button(
-            label="📥 Download Prediction Report",
-            data=report.encode('utf-8'),
-            file_name="water_quality_report.txt",
-            mime="text/plain"
-        )
-
-# --------------------------------------------
-# 📊 Page 2: Data Visualization
-# --------------------------------------------
-elif page == "📊 Visualize Data":
-    st.title("📊 Visual Analysis of Water Quality")
-
-    st.subheader("🔬 pH Distribution by Potability")
-    fig1, ax1 = plt.subplots()
-    sns.histplot(data=df, x="ph", hue="Potability", kde=True, ax=ax1)
-    st.pyplot(fig1)
-
-    st.subheader("📦 Boxplot Comparison (pH vs Potability)")
-    fig2, ax2 = plt.subplots()
-    sns.boxplot(x="Potability", y="ph", data=df, ax=ax2)
-    st.pyplot(fig2)
-
-    st.subheader("🧠 Correlation Heatmap")
-    fig3, ax3 = plt.subplots(figsize=(10, 6))
-    sns.heatmap(df.corr(), annot=True, cmap="coolwarm", ax=ax3)
-    st.pyplot(fig3)
-
-# --------------------------------------------
-# 🗺️ Page 3: Geospatial Water Potability Map
-# --------------------------------------------
-elif page == "🗺️ Map":
-    st.title("🌍 Country-level Water Potability")
-    st.markdown("### Potability Levels: Green = High, Red = Low")
-
-    try:
-        with open("data/custom.geo.json", encoding="utf-8") as f:
-            geojson = json.load(f)
-    except FileNotFoundError:
-        st.error("❌ GeoJSON file not found. Please ensure 'data/custom.geo.json' exists.")
-        st.stop()
-
-    real_scores = {
-        "India": 0.62, "United States": 0.91, "Nigeria": 0.33,
-        "Brazil": 0.75, "Canada": 0.95, "Russia": 0.88,
-        "China": 0.60, "Australia": 0.93, "South Africa": 0.51,
-        "Pakistan": 0.45
+    inputs = {
+        "pH": float_input("pH (scale 0–14)", "Indicates acidity or basicity of water."),
+        "Hardness": float_input("Hardness (mg/L)", "Calcium & magnesium content."),
+        "Solids": float_input("Solids (mg/L)", "Total dissolved solids."),
+        "Chloramines": float_input("Chloramines (mg/L)", "Used for water disinfection."),
+        "Sulfate": float_input("Sulfate (mg/L)", "High levels can affect taste."),
+        "Conductivity": float_input("Conductivity (μS/cm)", "Indicates ion concentration."),
+        "Organic_carbon": float_input("Organic Carbon (mg/L)", "Presence of organic compounds."),
+        "Trihalomethanes": float_input("Trihalomethanes (μg/L)", "By-product of chlorination."),
+        "Turbidity": float_input("Turbidity (NTU)", "Water cloudiness.")
     }
 
-    for feature in geojson["features"]:
-        name = feature["properties"].get("NAME") or feature["properties"].get("name")
-        score = real_scores.get(name, round(np.random.uniform(0.3, 0.9), 2))
-        feature["properties"]["potability_score"] = score
+    if st.button("🔮 Predict"):
+        if None in inputs.values():
+            st.warning("⚠️ Please enter all values before predicting.")
+        else:
+            feature_array = np.array([list(inputs.values())])
+            scaled_features = scaler.transform(feature_array)
+            prediction = model.predict(scaled_features)
 
-    layer = pdk.Layer(
-        "GeoJsonLayer",
-        data=geojson,
-        opacity=0.7,
-        stroked=True,
-        filled=True,
-        extruded=False,
-        get_fill_color="""
-            [
-                255 * (1 - properties.potability_score),
-                255 * properties.potability_score,
-                80
-            ]
-        """,
-        get_line_color=[40, 40, 40],
-        line_width_min_pixels=1,
-        pickable=True
-    )
+            result_text = (
+                "✅ The water is POTABLE (Safe to drink)."
+                if prediction[0] == 1
+                else "❌ The water is NOT POTABLE (Unsafe to drink)."
+            )
 
-    view_state = pdk.ViewState(
-        latitude=20,
-        longitude=0,
-        zoom=1.2,
-        pitch=0
-    )
+            if prediction[0] == 1:
+                st.success(result_text)
+            else:
+                st.error(result_text)
 
-    st.pydeck_chart(pdk.Deck(
-        layers=[layer],
-        initial_view_state=view_state,
-        tooltip={
-            "html": "Potability Score: <b>{potability_score}</b>",
-            "style": {"backgroundColor": "steelblue", "color": "white"}
-        }
-    ))
-# --------------------------------------------
-# 🧩 Page 4: Quiz Placeholder
-# --------------------------------------------
+
+            report = "Water Quality Prediction Report\n\n"
+            report += "Input Parameters:\n" + "\n".join(f"{k}: {v}" for k, v in inputs.items())
+            report += f"\n\nPrediction Result:\n{result_text}"
+
+            st.download_button(
+                label="📥 Download Prediction Report",
+                data=report.encode('utf-8'),
+                file_name="water_quality_report.txt",
+                mime="text/plain"
+            )
+
+# ----------------------------------------
+# Page: Dashboard
+# ----------------------------------------
+elif page == "📊 Dashboard":
+    st.title("📊 Water Quality Data Insights")
+    st.markdown("Explore distributions and relationships in the dataset.")
+
+    selected_feature = st.selectbox("Select a feature to visualize", df.columns[:-3])
+    st.bar_chart(df[selected_feature])
+
+    st.subheader("📌 Correlation Heatmap")
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(df.drop(columns=["latitude", "longitude"]).corr(), annot=True, cmap="coolwarm", ax=ax)
+    st.pyplot(fig)
+
+# ----------------------------------------
+# Page: GeoMap
+# ----------------------------------------
+elif page == "🗺️ GeoMap":
+    st.subheader("🗺️ Water Quality GeoMap")
+    st.markdown("Visualize potable and non-potable zones.")
+    
+    if "latitude" in df.columns and "longitude" in df.columns:
+        m = folium.Map(location=[df["latitude"].mean(), df["longitude"].mean()], zoom_start=4)
+        marker_cluster = MarkerCluster().add_to(m)
+
+        for _, row in df.iterrows():
+            color = "green" if row["Potability"] == 1 else "red"
+            popup = f"""
+            <b>pH:</b> {row.get('ph', 'NA')}<br>
+            <b>Hardness:</b> {row.get('Hardness', 'NA')}<br>
+            <b>Potable:</b> {bool(row['Potability'])}
+            """
+            folium.CircleMarker(
+                location=(row['latitude'], row['longitude']),
+                radius=5,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.7,
+                popup=popup
+            ).add_to(marker_cluster)
+
+        st_folium(m, width=700, height=500)
+    else:
+        st.warning("Geolocation columns not found in dataset.")
+
+# ----------------------------------------
+# Page: Explainability (SHAP Summary)
+# ----------------------------------------
+ 
+if page == "🧪 What-if Analysis":
+    st.title("🧪 What-if Scenario Simulator")
+
+    # Get only the features used for training
+    try:
+        feature_cols = list(scaler.feature_names_in_)  # safest way
+    except AttributeError:
+        feature_cols = df.drop(columns=["Potability", "latitude"], errors="ignore").columns.tolist()
+
+    # Collect user inputs via sliders
+    user_input = {}
+    for feature in feature_cols:
+        min_val = float(df[feature].min())
+        max_val = float(df[feature].max())
+        mean_val = float(df[feature].mean())
+
+        user_input[feature] = st.slider(
+            label=feature,
+            min_value=min_val,
+            max_value=max_val,
+            value=mean_val,
+            step=(max_val - min_val) / 100
+        )
+
+    input_df = pd.DataFrame([user_input])
+    st.write("### Input values:")
+    st.dataframe(input_df)
+
+    # Make sure input_df has only the scaler/model features
+    try:
+        input_df = input_df[scaler.feature_names_in_]
+    except AttributeError:
+        pass
+
+    # Scale the inputs
+    input_scaled = scaler.transform(input_df)
+
+    # Predict
+    prediction = model.predict(input_scaled)
+
+    if prediction[0] == 1:
+        st.success("✅ Water is predicted to be **potable** based on your inputs.")
+    else:
+        st.error("❌ Water is predicted to be **not potable** based on your inputs.")
+# ----------------------------------------
+# Page: Quizyy
+# ----------------------------------------
 elif page == "🧩 Quizyy":
-    st.markdown("""
-        <style>
-        .quiz-container * {
-            font-size: 40px !important;
-        }
-        </style>
-        <div class="quiz-container">
-    """, unsafe_allow_html=True)
     st.title("🧩 Quiz Time!")
-    st.markdown("Can you outsmart a drop of water? Let's see!")
+    st.markdown("Can you outsmart a drop of water? Let’s find out!")
 
-    # Initialize state
+    placeholder = "Select an option"
+
     if "quiz_submitted" not in st.session_state:
         st.session_state.quiz_submitted = False
     if "quiz_score" not in st.session_state:
         st.session_state.quiz_score = 0
 
-    # Placeholder option for blank default
-    placeholder = "Select an option"
+    questions = {
+        "quiz_q1": {
+            "question": "1. What does a high pH (above 7) usually indicate?",
+            "options": [
+                placeholder,
+                "A lemon's worst nightmare (Basic water)",
+                "Water with identity issues (Neutral)",
+                "The next acid rain candidate (Acidic)"
+            ],
+            "correct": "A lemon's worst nightmare"
+        },
+        "quiz_q2": {
+            "question": "2. Which chemical helps kill bacteria in drinking water?",
+            "options": [
+                placeholder,
+                "Chloramines (Bacteria's arch-nemesis)",
+                "Sugar (Sweet, but deadly? Nope.)",
+                "Oxygen (Vital for life, not for disinfection)"
+            ],
+            "correct": "Chloramines"
+        },
+        "quiz_q3": {
+            "question": "3. What does turbidity measure?",
+            "options": [
+                placeholder,
+                "Water's mood swings",
+                "Cloudiness or how murky it looks",
+                "How much glitter you accidentally spilled in it"
+            ],
+            "correct": "Cloudiness"
+        },
+        "quiz_q4": {
+            "question": "4. What’s the *correct* reaction to clean, safe water?",
+            "options": [
+                placeholder,
+                "💧😋 – *Hydration sensation!*",
+                "😬 – *Tastes like disappointment*",
+                "💀 – *Definitely not recommended*"
+            ],
+            "correct": "💧😋"
+        }
+    }
 
-    # Questions with blank default
-    q1 = st.radio(
-        "1. What does a high pH (above 7) usually indicate?",
-        [placeholder, 
-         "A lemon's worst nightmare (Basic water)",
-         "Water with identity issues (Neutral)",
-         "The next acid rain candidate (Acidic)"],
-        index=0,
-        key="quiz_q1"
-    )
+    answers = {}
+    for key, q in questions.items():
+        answers[key] = st.radio(q["question"], q["options"], index=0, key=key)
 
-    q2 = st.radio(
-        "2. Which chemical helps kill bacteria in drinking water?",
-        [placeholder,
-         "Chloramines (Bacteria's arch-nemesis)",
-         "Sugar (Sweet, but deadly? Nope.)",
-         "Oxygen (Vital for life, not for disinfection)"],
-        index=0,
-        key="quiz_q2"
-    )
-
-    q3 = st.radio(
-        "3. What does turbidity measure?",
-        [placeholder,
-         "Water's mood swings",
-         "Cloudiness or how murky it looks",
-         "How much glitter you accidentally spilled in it"],
-        index=0,
-        key="quiz_q3"
-    )
-
-    q4 = st.radio(
-        "4. What’s the *correct* reaction to clean, safe water?",
-        [placeholder,
-         "💧😋 – *Hydration sensation!*",
-         "😬 – *Tastes like disappointment*",
-         "💀 – *Definitely not recommended*"],
-        index=0,
-        key="quiz_q4"
-    )
-
-    # Submit Button
     if st.button("🎯 Submit Quiz"):
-        # Ensure all questions are answered
-        if (
-            st.session_state.quiz_q1 == placeholder or
-            st.session_state.quiz_q2 == placeholder or
-            st.session_state.quiz_q3 == placeholder or
-            st.session_state.quiz_q4 == placeholder
-        ):
+        if placeholder in answers.values():
             st.warning("⚠️ Please answer all questions before submitting.")
         else:
             score = 0
-            if st.session_state.quiz_q1.startswith("A lemon's worst nightmare"):
-                score += 1
-            if st.session_state.quiz_q2.startswith("Chloramines"):
-                score += 1
-            if "Cloudiness" in st.session_state.quiz_q3:
-                score += 1
-            if st.session_state.quiz_q4.startswith("💧😋"):
-                score += 1
-
+            for key, q in questions.items():
+                if answers[key].startswith(q["correct"]):
+                    score += 1
             st.session_state.quiz_score = score
             st.session_state.quiz_submitted = True
 
-    # Display Results
     if st.session_state.quiz_submitted:
         score = st.session_state.quiz_score
         st.success(f"🎉 You scored {score}/4!")
@@ -314,3 +315,11 @@ elif page == "🧩 Quizyy":
             st.markdown("😌 Decent effort. Maybe skim the water safety manual again?")
         else:
             st.markdown("🧪 Uh oh... did you drink the quiz water? Time for a refresher! 😅")
+
+        if st.button("🔁 Retake Quiz"):
+            # Clear all quiz-related state values
+            for key in list(st.session_state.keys()):
+                if key.startswith("quiz_q") or key in ["quiz_submitted", "quiz_score"]:
+                    del st.session_state[key]
+            st.rerun()
+
