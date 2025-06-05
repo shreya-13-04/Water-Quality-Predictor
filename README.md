@@ -5,7 +5,7 @@ An interactive AI-powered Streamlit web app to predict whether water is **safe**
 
 ## 🌐 Live Demo
 
-*Coming soon* (You can deploy on [Streamlit Cloud](https://streamlit.io/cloud) or [Render](https://render.com/)).
+👉 [Click here to try the app on Streamlit](https://nwtkjwzjwcsbepmdsczrmw.streamlit.app/)
 
 ---
 
