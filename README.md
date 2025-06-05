@@ -12,8 +12,9 @@ An interactive AI-powered Streamlit web app to predict whether water is **safe**
 ## 🚀 Features
 
 - ✅ Predicts potability (safe/unsafe) using machine learning
-- 📊 Visualizes parameter trends and correlations
-- 🗺️ Map section (optional geolocation-based insights)
+- 🧪 **What-if Analysis** with sliders for parameter tuning
+- 📊 Visualization Dashboard for trends and correlation insights
+- 🗺️ Interactive Geospatial Mapping with radius filtering
 - 🧩 Engaging Water Awareness Quiz
 - 📱 User-friendly, responsive UI
 - 🧠 Based on real-world water quality dataset
@@ -126,8 +127,11 @@ Challenge users to test their water safety knowledge using the fun and education
 
 ## ✨ Future Enhancements
 
-- 🔍 Explainable AI (SHAP/LIME) for feature importance
-- 🧬 Integration with sensor data (IoT-based input)
+📌 Future Enhancements
+
+🔍 SHAP / LIME-based explainability
+🌐 Real-time water quality API integration
+📦 Dockerize for production deployment
 
 ---
 
