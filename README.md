@@ -129,9 +129,9 @@ Challenge users to test their water safety knowledge using the fun and education
 
 📌 Future Enhancements
 
-🔍 SHAP / LIME-based explainability
-🌐 Real-time water quality API integration
-📦 Dockerize for production deployment
+-🔍 SHAP / LIME-based explainability
+-🌐 Real-time water quality API integration
+-📦 Dockerize for production deployment
 
 ---
 
