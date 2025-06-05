@@ -124,14 +124,18 @@ Challenge users to test their water safety knowledge using the fun and education
 - Custom feedback
 
 ---
-
 ## ✨ Future Enhancements
 
-📌 Future Enhancements
+📌 **Planned Features**
 
--🔍 SHAP / LIME-based explainability
--🌐 Real-time water quality API integration
--📦 Dockerize for production deployment
+- 🔍 **SHAP / LIME-based explainability**  
+  Add interpretable ML insights to explain why water is predicted as potable or not.
+
+- 🌐 **Real-time water quality API integration**  
+  Integrate with APIs to fetch real-time water quality data from various regions.
+
+- 📦 **Dockerize for production deployment**  
+  Package the entire app into a Docker container for easy deployment and scalability.
 
 ---
 
